@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 
-import httpx
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -23,7 +22,6 @@ from wmbgbot.handlers import (
     admin_remove_copy,
     admin_reset_loan,
     handle_accept,
-    handle_addgame_callback,
     handle_borrow,
     handle_decline,
     handle_manual_title,
@@ -36,6 +34,7 @@ from wmbgbot.handlers import (
     removegame,
     return_game,
     search,
+    set_profile,
     start,
     whohas,
 )
@@ -66,12 +65,6 @@ def main() -> None:
     app.bot_data["db"] = db
     app.bot_data["config"] = config
 
-    # Build BGG HTTP client with auth if token is configured
-    bgg_headers = {"User-Agent": "WMBGbot/0.1"}
-    if config.bgg_api_token:
-        bgg_headers["Authorization"] = f"Bearer {config.bgg_api_token}"
-    app.bot_data["bgg_client"] = httpx.AsyncClient(headers=bgg_headers)
-
     # ── Register command handlers ──────────────────────────────────
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -83,8 +76,9 @@ def main() -> None:
     app.add_handler(CommandHandler("removegame", removegame))
     app.add_handler(CommandHandler("myrequests", myrequests))
     app.add_handler(CommandHandler("return", return_game))
+    app.add_handler(CommandHandler("setprofile", set_profile))
 
-    # Manual title entry (when user types a title after /addgame with no BGG match)
+    # Profile setup: text messages in DM for city/neighborhood input
     app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_manual_title))
 
     # Admin commands
@@ -97,7 +91,6 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_borrow, pattern=r"^borrow:"))
     app.add_handler(CallbackQueryHandler(handle_accept, pattern=r"^accept:"))
     app.add_handler(CallbackQueryHandler(handle_decline, pattern=r"^decline:"))
-    app.add_handler(CallbackQueryHandler(handle_addgame_callback, pattern=r"^addgame:"))
     app.add_handler(CallbackQueryHandler(handle_remove, pattern=r"^remove:"))
     app.add_handler(CallbackQueryHandler(handle_return, pattern=r"^return:"))
 
@@ -117,13 +110,14 @@ def main() -> None:
         BotCommand("search", "Search the game catalog by title"),
         BotCommand("library", "List all games in the catalog"),
         BotCommand("mygames", "Show your own copies"),
-        BotCommand("whohas", "Find who owns a specific game"),
+        BotCommand("whohas", "Find who currently has a game"),
         BotCommand("help", "Show all commands"),
     ]
 
     dm_commands = group_commands + [
         BotCommand("start", "Register with the bot"),
-        BotCommand("addgame", "Add a game via BGG lookup"),
+        BotCommand("setprofile", "Set your city and neighborhood"),
+        BotCommand("addgame", "Add a game to your collection"),
         BotCommand("removegame", "Remove one of your copies"),
         BotCommand("myrequests", "View pending borrow requests"),
         BotCommand("return", "Mark a borrowed game as returned"),

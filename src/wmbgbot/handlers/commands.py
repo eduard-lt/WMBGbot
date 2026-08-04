@@ -14,32 +14,78 @@ logger = logging.getLogger(__name__)
 # ── /start ───────────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Register a user or redirect to DM."""
+    """Register a user. In DM: welcomes and prompts for profile setup."""
     if update.effective_chat is None or update.effective_user is None:
         return
 
-    if update.effective_chat.type == ChatType.PRIVATE:
-        db = context.bot_data["db"]
-        from wmbgbot.db.queries import upsert_user, set_dm_started
+    if update.effective_chat.type != ChatType.PRIVATE:
+        await update.message.reply_text(
+            "Please send /start to me in a **private message** to complete your setup."
+        )
+        return
 
-        user = upsert_user(
-            db,
-            update.effective_user.id,
-            update.effective_user.full_name or update.effective_user.username or "Unknown",
-        )
-        set_dm_started(db, update.effective_user.id)
+    db = context.bot_data["db"]
+    from wmbgbot.db.queries import upsert_user, set_dm_started
+
+    telegram_id = update.effective_user.id
+    display_name = update.effective_user.full_name or update.effective_user.username or "Unknown"
+
+    upsert_user(db, telegram_id, display_name)
+    set_dm_started(db, telegram_id)
+
+    await update.message.reply_text(
+        f"Welcome, {display_name}! 🎲\n\n"
+        "Let's set up your profile. Use /setprofile <city>, <neighborhood>\n"
+        "Example: `/setprofile Bucharest, Pipera`\n\n"
+        "Then add your games with /addgame <title>.\n"
+        "Use /help to see all commands.",
+        parse_mode="Markdown",
+    )
+
+
+# ── /setprofile ──────────────────────────────────────────────────────
+
+async def set_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set city and neighborhood for the user."""
+    if update.effective_chat is None or update.effective_user is None:
+        return
+
+    if update.effective_chat.type != ChatType.PRIVATE:
+        await update.message.reply_text("Please use /setprofile in DM.")
+        return
+
+    db = context.bot_data["db"]
+    from wmbgbot.db.queries import get_user, set_user_profile
+
+    user = get_user(db, update.effective_user.id)
+    if user is None:
+        await update.message.reply_text("Send /start first to register.")
+        return
+
+    args = context.args
+    if not args:
         await update.message.reply_text(
-            f"Welcome, {user.display_name}! 🎲\n\n"
-            "You're now registered with the Board Game Lending Bot.\n"
-            "Use /help to see available commands.\n\n"
-            "To add your first game, use /addgame <title> — I'll look it up on BoardGameGeek!"
+            "Usage: /setprofile <city>, <neighborhood>\n"
+            "Example: `/setprofile Bucharest, Pipera`"
         )
-    else:
+        return
+
+    joined = " ".join(args)
+    parts = [p.strip() for p in joined.split(",", 1)]
+    city = parts[0] if len(parts) > 0 else ""
+    neighborhood = parts[1] if len(parts) > 1 else ""
+
+    if not city:
         await update.message.reply_text(
-            "Please send /start to me in a **private message** to complete your setup.\n"
-            "👉 [Open private chat](https://t.me/me)",
-            parse_mode="Markdown",
+            "Please provide at least a city. Example: `/setprofile Bucharest, Pipera`"
         )
+        return
+
+    set_user_profile(db, update.effective_user.id, city, neighborhood)
+
+    await update.message.reply_text(
+        f"✅ Profile updated: {city}" + (f", {neighborhood}" if neighborhood else ""),
+    )
 
 
 # ── /help ────────────────────────────────────────────────────────────
@@ -53,22 +99,23 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/search \\<title\\> — Search the group's game catalog\n"
         "/library — List all games in the catalog\n"
         "/mygames — Show your copies and their status\n"
-        "/whohas \\<title\\> — Find who owns a specific game\n"
+        "/whohas \\<title\\> — Find who currently has a game\n"
         "/help — Show this help message"
     )
 
     dm_cmds = (
         "📬 *DM Commands*\n"
-        "/start — Register with the bot (required to receive request notifications)\n"
-        "/addgame \\<title\\> — Add a game to the catalog (BGG lookup)\n"
+        "/start — Register with the bot\n"
+        "/setprofile \\<city\\>\\, \\<neighborhood\\> — Set your location\n"
+        "/addgame \\<title\\> — Add a game to your collection\n"
         "/removegame — Remove one of your copies\n"
-        "/myrequests — View your pending borrow requests (incoming & outgoing)\n"
+        "/myrequests — View your pending borrow requests\n"
         "/return — Mark a borrowed game as returned"
     )
 
     admin_cmds = (
         "🔧 *Admin Commands*\n"
-        "/admin\\_edit\\_game \\<copy\\_id\\> \\<new\\_title\\> — Fix a bad title match\n"
+        "/admin\\_edit\\_game \\<copy\\_id\\> \\<new\\_title\\> — Fix a bad title\n"
         "/admin\\_remove\\_copy \\<copy\\_id\\> — Force-remove any copy\n"
         "/admin\\_reset\\_loan \\<loan\\_id\\> — Force-close a stuck loan\n"
         "/admin\\_list\\_users — List all registered users"
@@ -78,11 +125,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if is_dm:
         text += "\n\n" + dm_cmds
 
-    # Check if user is admin
     db = context.bot_data["db"]
     if update.effective_user is not None:
         from wmbgbot.db.queries import get_user
-
         user = get_user(db, update.effective_user.id)
         if user and user.is_admin:
             text += "\n\n" + admin_cmds
@@ -117,11 +162,13 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         for copy_info in game["copies"]:
             status_icon = "✅" if copy_info["status"] == "available" else "📦"
             status_text = (
-                f"available"
+                "available"
                 if copy_info["status"] == "available"
-                else f"borrowed by {copy_info['borrower_name']}"
+                else f"held by {copy_info['borrower_name']}"
             )
-            lines.append(f"  {status_icon} {copy_info['owner_name']} — _{status_text}_")
+            owner = copy_info["owner_name"]
+            location = _format_location(copy_info.get("city"), copy_info.get("neighborhood"))
+            lines.append(f"  {status_icon} {owner}{location} — _{status_text}_")
         lines.append("")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
@@ -177,7 +224,7 @@ async def mygames(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     lines = [f"🎲 *{user.display_name}'s Games*", ""]
     for c in copies:
         icon = "✅" if c["status"] == "available" else "📦"
-        extra = f" — borrowed by {c['borrower_name']}" if c["status"] == "borrowed" else ""
+        extra = f" — held by {c['borrower_name']}" if c["status"] == "borrowed" else ""
         lines.append(f"{icon} *{c['title']}*{extra}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
@@ -186,7 +233,7 @@ async def mygames(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # ── /whohas ──────────────────────────────────────────────────────────
 
 async def whohas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Find who owns a specific game (stricter search)."""
+    """Find who currently has a specific game."""
     if update.effective_chat is None:
         return
 
@@ -208,16 +255,29 @@ async def whohas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     for game in results:
         lines.append(f"*{game['title']}*:")
         for copy_info in game["copies"]:
-            status_text = "✅ available" if copy_info["status"] == "available" else f"📦 borrowed by {copy_info['borrower_name']}"
-            lines.append(f"  • {copy_info['owner_name']} — {status_text}")
+            owner = copy_info["owner_name"]
+            location = _format_location(copy_info.get("city"), copy_info.get("neighborhood"))
+            if copy_info["status"] == "available":
+                lines.append(f"  ✅ {owner}{location} — available")
+            else:
+                lines.append(f"  📦 {copy_info['borrower_name']} — currently holding (owner: {owner}{location})")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+def _format_location(city: str | None, neighborhood: str | None) -> str:
+    if not city:
+        return ""
+    parts = [city]
+    if neighborhood:
+        parts.append(neighborhood)
+    return f" 📍({', '.join(parts)})"
 
 
 # ── /addgame (DM only) ───────────────────────────────────────────────
 
 async def addgame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Add a game via BGG lookup. DM only."""
+    """Add a game directly by title. DM only."""
     if update.effective_chat is None or update.effective_user is None:
         return
 
@@ -231,122 +291,19 @@ async def addgame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     db = context.bot_data["db"]
-    from wmbgbot.db.queries import get_user, upsert_user
+    from wmbgbot.db.queries import get_user, upsert_user, add_game, add_copy
 
     telegram_id = update.effective_user.id
     display_name = update.effective_user.full_name or update.effective_user.username or "Unknown"
 
-    # Ensure user exists
     user = get_user(db, telegram_id)
     if user is None:
         user = upsert_user(db, telegram_id, display_name)
 
-    # Search BGG
-    from wmbgbot.bgg import search_bgg, BGGError
-
-    bgg_client = context.bot_data["bgg_client"]
-    bgg_base = context.bot_data["config"].bgg_api_base_url
-
-    try:
-        bgg_results = await search_bgg(bgg_client, bgg_base, query)
-    except BGGError:
-        logger.warning("BGG search failed, adding '%s' directly", query)
-        await _add_game_manual(update, context, query)
-        return
-
-    if not bgg_results:
-        logger.info("BGG no results for '%s', adding directly", query)
-        await _add_game_manual(update, context, query)
-        return
-
-    if len(bgg_results) == 1:
-        # Auto-confirm the single result
-        await _add_game_by_bgg_id(update, context, bgg_results[0]["bgg_id"], bgg_results[0]["name"])
-        return
-
-    # Multiple results — present inline keyboard
-    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-    keyboard = []
-    for r in bgg_results:
-        label = r["name"]
-        if r.get("yearpublished"):
-            label += f" ({r['yearpublished']})"
-        # Truncate callback data — Telegram limit is 64 bytes
-        keyboard.append([
-            InlineKeyboardButton(
-                label,
-                callback_data=f"addgame:{r['bgg_id']}:{r['name'][:32]}"
-            )
-        ])
-
-    await update.message.reply_text(
-        f"Multiple matches for '{query}'. Pick the right one:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-
-async def _add_game_manual(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    title: str,
-) -> None:
-    """Add a game directly by title, without BGG lookup."""
-    if update.effective_user is None:
-        return
-
-    db = context.bot_data["db"]
-    from wmbgbot.db.queries import add_game, add_copy, get_user
-
-    user = get_user(db, update.effective_user.id)
-    assert user is not None
-
-    game_id = add_game(db, None, title, None)
+    game_id = add_game(db, None, query, None)
     add_copy(db, game_id, user.id)
 
-    await (update.callback_query.edit_message_text if update.callback_query else update.message.reply_text)(
-        f"✅ Added *{title}* to your collection!", parse_mode="Markdown"
-    )
-
-
-async def _add_game_by_bgg_id(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    bgg_id: int,
-    fallback_title: str,
-) -> None:
-    """Fetch BGG details, create game + copy, confirm to user."""
-    if update.effective_user is None:
-        return
-
-    db = context.bot_data["db"]
-    bgg_client = context.bot_data["bgg_client"]
-    bgg_base = context.bot_data["config"].bgg_api_base_url
-
-    from wmbgbot.bgg import fetch_bgg_details, BGGError
-    from wmbgbot.db.queries import add_game, add_copy, get_user
-
-    try:
-        details = await fetch_bgg_details(bgg_client, bgg_base, bgg_id)
-    except BGGError:
-        details = {"title": fallback_title, "thumbnail_url": None, "image_url": None}
-
-    title = details["title"]
-    cover = details.get("image_url") or details.get("thumbnail_url")
-
-    game_id = add_game(db, bgg_id, title, cover)
-    user = get_user(db, update.effective_user.id)
-    assert user is not None
-    add_copy(db, game_id, user.id)
-
-    msg = f"✅ Added *{title}* to your collection!"
-    if cover:
-        msg += f"\n\n[Cover]({cover})"
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(msg, parse_mode="Markdown")
-    else:
-        await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(f"✅ Added *{query}* to your collection!", parse_mode="Markdown")
 
 
 # ── /removegame (DM only) ────────────────────────────────────────────
@@ -380,7 +337,7 @@ async def removegame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     for c in copies:
         if c["status"] == "borrowed":
-            lines.append(f"🔒 *{c['title']}* — currently borrowed, can't remove")
+            lines.append(f"🔒 *{c['title']}* — currently out, can't remove")
         else:
             lines.append(f"• *{c['title']}*")
             keyboard.append([
@@ -395,9 +352,7 @@ async def removegame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     await update.message.reply_text(
-        "\n".join(lines),
-        parse_mode="Markdown",
-        reply_markup=reply_markup,
+        "\n".join(lines), parse_mode="Markdown", reply_markup=reply_markup,
     )
 
 
@@ -437,11 +392,9 @@ async def myrequests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     keyboard = []
 
     if incoming:
-        lines.append("📥 *Incoming Requests* (you own the game):")
+        lines.append("📥 *Incoming Requests* (they want a game you hold):")
         for r in incoming:
-            lines.append(
-                f"  • {r['requester_name']} wants *{r['game_title']}*"
-            )
+            lines.append(f"  • {r['requester_name']} wants *{r['game_title']}*")
             keyboard.append([
                 InlineKeyboardButton(
                     f"✅ Accept — {r['game_title'][:30]}",
@@ -462,9 +415,7 @@ async def myrequests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
     await update.message.reply_text(
-        "\n".join(lines),
-        parse_mode="Markdown",
-        reply_markup=reply_markup,
+        "\n".join(lines), parse_mode="Markdown", reply_markup=reply_markup,
     )
 
 
@@ -511,34 +462,32 @@ async def return_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "\n".join(lines),
-        parse_mode="Markdown",
-        reply_markup=reply_markup,
+        "\n".join(lines), parse_mode="Markdown", reply_markup=reply_markup,
     )
 
 
-# ── Manual title entry (DM text when awaiting_manual_title is set) ──
+# ── Manual text handler (DM) ─────────────────────────────────────────
 
 async def handle_manual_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle a text message in DM that should be a manual game title."""
-    if update.message is None or update.message.text is None or update.effective_user is None:
+    """Handle free-text in DM — currently does nothing unless awaiting_manual_title."""
+    if update.message is None or update.message.text is None:
         return
-
     if update.effective_chat.type != ChatType.PRIVATE:
+        return
+    if not context.user_data.get("awaiting_manual_title"):
         return
 
     text = update.message.text.strip()
     if text.startswith("/"):
-        return  # let other command handlers deal with it
+        return
 
     if text.lower() == "/cancel":
         context.user_data.pop("awaiting_manual_title", None)
-        context.user_data.pop("manual_title_hint", None)
         await update.message.reply_text("Canceled.")
         return
 
     db = context.bot_data["db"]
-    from wmbgbot.db.queries import add_game, add_copy, get_user
+    from wmbgbot.db.queries import get_user, add_game, add_copy
 
     user = get_user(db, update.effective_user.id)
     if user is None:
@@ -549,6 +498,4 @@ async def handle_manual_title(update: Update, context: ContextTypes.DEFAULT_TYPE
     add_copy(db, game_id, user.id)
 
     context.user_data.pop("awaiting_manual_title", None)
-    context.user_data.pop("manual_title_hint", None)
-
     await update.message.reply_text(f"✅ Added *{text}* to your collection!", parse_mode="Markdown")

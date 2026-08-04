@@ -10,12 +10,12 @@ from wmbgbot.handlers.commands import (
     removegame,
     return_game,
     search,
+    set_profile,
     start,
     whohas,
 )
 from wmbgbot.handlers.callbacks import (
     handle_accept,
-    handle_addgame_callback,
     handle_borrow,
     handle_decline,
     handle_remove,
@@ -29,7 +29,6 @@ from wmbgbot.handlers.admin import (
 )
 
 __all__ = [
-    # Commands
     "addgame",
     "handle_manual_title",
     "help_command",
@@ -39,16 +38,14 @@ __all__ = [
     "removegame",
     "return_game",
     "search",
+    "set_profile",
     "start",
     "whohas",
-    # Callbacks
     "handle_accept",
-    "handle_addgame_callback",
     "handle_borrow",
     "handle_decline",
     "handle_remove",
     "handle_return",
-    # Admin
     "admin_edit_game",
     "admin_list_users",
     "admin_remove_copy",

@@ -26,6 +26,20 @@ def upsert_user(conn: sqlite3.Connection, telegram_id: int, display_name: str) -
     return get_user(conn, telegram_id)  # type: ignore[return-value]
 
 
+def set_user_profile(
+    conn: sqlite3.Connection,
+    telegram_id: int,
+    city: str,
+    neighborhood: str,
+) -> None:
+    """Update a user's city and neighborhood."""
+    conn.execute(
+        "UPDATE users SET city = ?, neighborhood = ? WHERE telegram_id = ?",
+        (city, neighborhood, telegram_id),
+    )
+    conn.commit()
+
+
 def set_dm_started(conn: sqlite3.Connection, telegram_id: int) -> None:
     """Mark that a user has started a DM conversation with the bot."""
     conn.execute(
@@ -38,7 +52,7 @@ def set_dm_started(conn: sqlite3.Connection, telegram_id: int) -> None:
 def get_user(conn: sqlite3.Connection, telegram_id: int) -> User | None:
     """Get a user by Telegram ID."""
     row = conn.execute(
-        "SELECT id, telegram_id, display_name, is_admin, dm_started FROM users WHERE telegram_id = ?",
+        "SELECT id, telegram_id, display_name, city, neighborhood, is_admin, dm_started FROM users WHERE telegram_id = ?",
         (telegram_id,),
     ).fetchone()
     if row is None:
@@ -47,15 +61,17 @@ def get_user(conn: sqlite3.Connection, telegram_id: int) -> User | None:
         id=row[0],
         telegram_id=row[1],
         display_name=row[2],
-        is_admin=bool(row[3]),
-        dm_started=bool(row[4]),
+        city=row[3],
+        neighborhood=row[4],
+        is_admin=bool(row[5]),
+        dm_started=bool(row[6]),
     )
 
 
 def get_user_by_id(conn: sqlite3.Connection, user_id: int) -> User | None:
     """Get a user by internal id."""
     row = conn.execute(
-        "SELECT id, telegram_id, display_name, is_admin, dm_started FROM users WHERE id = ?",
+        "SELECT id, telegram_id, display_name, city, neighborhood, is_admin, dm_started FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
     if row is None:
@@ -64,23 +80,27 @@ def get_user_by_id(conn: sqlite3.Connection, user_id: int) -> User | None:
         id=row[0],
         telegram_id=row[1],
         display_name=row[2],
-        is_admin=bool(row[3]),
-        dm_started=bool(row[4]),
+        city=row[3],
+        neighborhood=row[4],
+        is_admin=bool(row[5]),
+        dm_started=bool(row[6]),
     )
 
 
 def get_all_users(conn: sqlite3.Connection) -> list[User]:
     """Get all registered users."""
     rows = conn.execute(
-        "SELECT id, telegram_id, display_name, is_admin, dm_started FROM users ORDER BY display_name"
+        "SELECT id, telegram_id, display_name, city, neighborhood, is_admin, dm_started FROM users ORDER BY display_name"
     ).fetchall()
     return [
         User(
             id=r[0],
             telegram_id=r[1],
             display_name=r[2],
-            is_admin=bool(r[3]),
-            dm_started=bool(r[4]),
+            city=r[3],
+            neighborhood=r[4],
+            is_admin=bool(r[5]),
+            dm_started=bool(r[6]),
         )
         for r in rows
     ]
@@ -121,6 +141,8 @@ def search_games(conn: sqlite3.Connection, query: str) -> list[dict]:
         """SELECT g.id, g.bgg_id, g.title, g.cover_image_url,
                   c.id AS copy_id, c.owner_id, c.status,
                   u.display_name AS owner_name,
+                  u.city AS owner_city,
+                  u.neighborhood AS owner_neighborhood,
                   l.borrower_id,
                   ub.display_name AS borrower_name
            FROM games g
@@ -150,7 +172,9 @@ def search_games(conn: sqlite3.Connection, query: str) -> list[dict]:
             "owner_id": r[5],
             "status": r[6],
             "owner_name": r[7],
-            "borrower_name": r[9] if r[6] == "borrowed" else None,
+            "city": r[8],
+            "neighborhood": r[9],
+            "borrower_name": r[11] if r[6] == "borrowed" else None,
         })
 
     return list(games.values())
@@ -366,6 +390,16 @@ def return_loan(conn: sqlite3.Connection, loan_id: int) -> bool:
     cur = conn.execute(
         "UPDATE loans SET returned_at = CURRENT_TIMESTAMP WHERE id = ? AND returned_at IS NULL",
         (loan_id,),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def return_active_loan_for_copy(conn: sqlite3.Connection, copy_id: int) -> bool:
+    """Close the active (unreturned) loan for a copy, if any."""
+    cur = conn.execute(
+        "UPDATE loans SET returned_at = CURRENT_TIMESTAMP WHERE copy_id = ? AND returned_at IS NULL",
+        (copy_id,),
     )
     conn.commit()
     return cur.rowcount > 0

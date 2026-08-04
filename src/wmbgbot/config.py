@@ -34,8 +34,6 @@ class Config:
     """Typed application configuration loaded from environment."""
 
     bot_token: str
-    bgg_api_base_url: str
-    bgg_api_token: str | None
     database_path: str
     log_file: str
     log_level: str
@@ -48,12 +46,8 @@ class Config:
         if not token or token == "your_bot_token_here":
             raise ValueError("BOT_TOKEN is not set in .env file")
 
-        bgg_token = os.getenv("BGG_API_TOKEN", "").strip()
-
         return cls(
             bot_token=token,
-            bgg_api_base_url=os.getenv("BGG_API_BASE_URL", "https://boardgamegeek.com/xmlapi2"),
-            bgg_api_token=bgg_token if bgg_token else None,
             database_path=os.getenv("DATABASE_PATH", "data/bot.db"),
             log_file=os.getenv("LOG_FILE", "bot.log"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),

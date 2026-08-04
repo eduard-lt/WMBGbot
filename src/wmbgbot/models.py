@@ -10,6 +10,8 @@ class User:
     id: int
     telegram_id: int
     display_name: str
+    city: str = ""
+    neighborhood: str = ""
     is_admin: bool = False
     dm_started: bool = False
 
