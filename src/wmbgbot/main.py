@@ -102,6 +102,41 @@ def main() -> None:
 
     app.add_error_handler(error_handler)
 
+    # ── Register bot commands for Telegram's auto-complete menu ────
+    import asyncio as _asyncio
+    from telegram import BotCommand
+    from telegram import BotCommandScopeAllGroupChats as GroupScope
+    from telegram import BotCommandScopeAllPrivateChats as DMScope
+
+    group_commands = [
+        BotCommand("search", "Search the game catalog by title"),
+        BotCommand("library", "List all games in the catalog"),
+        BotCommand("mygames", "Show your own copies"),
+        BotCommand("whohas", "Find who owns a specific game"),
+        BotCommand("help", "Show all commands"),
+    ]
+
+    dm_commands = group_commands + [
+        BotCommand("start", "Register with the bot"),
+        BotCommand("addgame", "Add a game via BGG lookup"),
+        BotCommand("removegame", "Remove one of your copies"),
+        BotCommand("myrequests", "View pending borrow requests"),
+        BotCommand("return", "Mark a borrowed game as returned"),
+        BotCommand("admin_list_users", "[Admin] List all registered users"),
+        BotCommand("admin_edit_game", "[Admin] Fix a bad title match"),
+        BotCommand("admin_remove_copy", "[Admin] Force-remove any copy"),
+        BotCommand("admin_reset_loan", "[Admin] Force-close a stuck loan"),
+    ]
+
+    loop = _asyncio.get_event_loop()
+    loop.run_until_complete(app.bot.set_my_commands(
+        commands=group_commands, scope=GroupScope(),
+    ))
+    loop.run_until_complete(app.bot.set_my_commands(
+        commands=dm_commands, scope=DMScope(),
+    ))
+    logger.info("Bot commands registered with Telegram")
+
     # ── Start polling ──────────────────────────────────────────────
     logger.info("Bot is running. Press Ctrl+C to stop.")
     app.run_polling(allowed_updates=["message", "callback_query"])
