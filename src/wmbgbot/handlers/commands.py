@@ -250,22 +250,13 @@ async def addgame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         bgg_results = await search_bgg(bgg_client, bgg_base, query)
     except BGGError:
-        logger.warning("BGG search failed, offering manual entry for '%s'", query)
-        await update.message.reply_text(
-            f"⚠️ Couldn't reach BoardGameGeek.\n\n"
-            f"Adding *{query}* directly. Type the exact title you want, or send /cancel:"
-        )
-        context.user_data["awaiting_manual_title"] = True
-        context.user_data["manual_title_hint"] = query
+        logger.warning("BGG search failed, adding '%s' directly", query)
+        await _add_game_manual(update, context, query)
         return
 
     if not bgg_results:
-        await update.message.reply_text(
-            f"No results on BoardGameGeek for '{query}'.\n\n"
-            "You can add it manually by typing the title now:"
-        )
-        # Store state for next text message
-        context.user_data["awaiting_manual_title"] = True
+        logger.info("BGG no results for '%s', adding directly", query)
+        await _add_game_manual(update, context, query)
         return
 
     if len(bgg_results) == 1:
@@ -292,6 +283,29 @@ async def addgame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         f"Multiple matches for '{query}'. Pick the right one:",
         reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def _add_game_manual(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    title: str,
+) -> None:
+    """Add a game directly by title, without BGG lookup."""
+    if update.effective_user is None:
+        return
+
+    db = context.bot_data["db"]
+    from wmbgbot.db.queries import add_game, add_copy, get_user
+
+    user = get_user(db, update.effective_user.id)
+    assert user is not None
+
+    game_id = add_game(db, None, title, None)
+    add_copy(db, game_id, user.id)
+
+    await (update.callback_query.edit_message_text if update.callback_query else update.message.reply_text)(
+        f"✅ Added *{title}* to your collection!", parse_mode="Markdown"
     )
 
 
