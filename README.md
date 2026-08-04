@@ -157,3 +157,7 @@ src/wmbgbot/
     ├── callbacks.py     # Inline button handlers (borrow, accept, return)
     └── admin.py         # Admin-only commands
 ```
+
+## Docs
+
+- [BGG API notes](docs/bgg-api.md) — how the BoardGameGeek XML API2 works, debug tips, and fallback strategy
