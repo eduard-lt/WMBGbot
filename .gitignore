@@ -1,0 +1,26 @@
+# Environment config (contains secrets)
+.env
+
+# SQLite database
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Logs
+*.log
+*.log.*
+
+# Backups
+backups/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

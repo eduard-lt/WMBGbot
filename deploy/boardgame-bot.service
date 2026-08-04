@@ -1,0 +1,18 @@
+[Unit]
+Description=Board Game Lending Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=eduard
+WorkingDirectory=/home/eduard/boardgame-bot
+EnvironmentFile=/home/eduard/boardgame-bot/.env
+ExecStart=/home/eduard/boardgame-bot/.venv/bin/python -m wmbgbot.main
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
