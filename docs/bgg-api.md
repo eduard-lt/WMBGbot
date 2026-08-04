@@ -75,8 +75,8 @@ This means the bot works fine **without BGG** — games can be added with free-t
 
 ## Why BGG Might Fail
 
-1. **Network**: Pi behind NAT/Tailscale may not reach `boardgamegeek.com`
-2. **Auth**: BGG now requires API registration/tokens
+1. **Auth (401 Unauthorized)** — Confirmed on 2026-08-04: BGG's XML API2 now requires authentication. Requests without a valid API token return HTTP 401. This is the current reason our Pi can't reach BGG — TLS/DNS/connectivity all work fine, but the API rejects unauthenticated calls.
+2. **Network**: Pi behind NAT/Tailscale may not reach `boardgamegeek.com`
 3. **Throttling**: Too many requests too fast → 500/503
 4. **User-Agent**: BGG blocks requests without one (we set `WMBGbot/0.1`)
 

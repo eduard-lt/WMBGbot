@@ -36,8 +36,9 @@ async def search_bgg(
         )
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.error("BGG search request failed: %s", exc)
-        raise BGGError(f"Failed to search BGG: {exc}") from exc
+        status = getattr(getattr(exc, 'response', None), 'status_code', '?')
+        logger.error("BGG search request failed (HTTP %s): %s", status, exc)
+        raise BGGError(f"Failed to search BGG (HTTP {status}): {exc}") from exc
 
     root = ET.fromstring(resp.text)
     items = root.findall("item")
