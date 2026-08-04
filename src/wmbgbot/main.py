@@ -24,11 +24,14 @@ from wmbgbot.handlers import (
     handle_accept,
     handle_borrow,
     handle_decline,
+    handle_game_detail,
     handle_manual_title,
+    handle_menu_callback,
     handle_remove,
     handle_return,
     help_command,
     library,
+    menu,
     mygames,
     myrequests,
     removegame,
@@ -67,6 +70,7 @@ def main() -> None:
 
     # ── Register command handlers ──────────────────────────────────
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("menu", menu))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CommandHandler("library", library))
@@ -93,6 +97,8 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_decline, pattern=r"^decline:"))
     app.add_handler(CallbackQueryHandler(handle_remove, pattern=r"^remove:"))
     app.add_handler(CallbackQueryHandler(handle_return, pattern=r"^return:"))
+    app.add_handler(CallbackQueryHandler(handle_menu_callback, pattern=r"^menu:"))
+    app.add_handler(CallbackQueryHandler(handle_game_detail, pattern=r"^game:"))
 
     # ── Error handler ──────────────────────────────────────────────
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -107,6 +113,7 @@ def main() -> None:
     from telegram import BotCommandScopeAllPrivateChats as DMScope
 
     group_commands = [
+        BotCommand("menu", "Main menu with buttons"),
         BotCommand("search", "Search the game catalog by title"),
         BotCommand("library", "List all games in the catalog"),
         BotCommand("mygames", "Show your own copies"),

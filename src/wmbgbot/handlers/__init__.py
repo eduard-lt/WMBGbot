@@ -2,9 +2,12 @@
 
 from wmbgbot.handlers.commands import (
     addgame,
+    handle_game_detail,
     handle_manual_title,
+    handle_menu_callback,
     help_command,
     library,
+    menu,
     mygames,
     myrequests,
     removegame,
@@ -30,9 +33,12 @@ from wmbgbot.handlers.admin import (
 
 __all__ = [
     "addgame",
+    "handle_game_detail",
     "handle_manual_title",
+    "handle_menu_callback",
     "help_command",
     "library",
+    "menu",
     "mygames",
     "myrequests",
     "removegame",

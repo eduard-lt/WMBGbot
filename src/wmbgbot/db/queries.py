@@ -201,6 +201,45 @@ def get_library(conn: sqlite3.Connection) -> list[dict]:
     ]
 
 
+def get_library_full(conn: sqlite3.Connection) -> list[dict]:
+    """Like get_library but returns one row per unique game (no copies detail)."""
+    return get_library(conn)
+
+
+def get_game_copies_detail(conn: sqlite3.Connection, game_id: int) -> list[dict]:
+    """Get all copies of a game with owner and borrower details."""
+    rows = conn.execute(
+        """SELECT c.id AS copy_id, c.owner_id, c.status,
+                  uo.display_name AS owner_name,
+                  uo.city, uo.neighborhood,
+                  l.borrower_id,
+                  ub.display_name AS borrower_name,
+                  g.title
+           FROM copies c
+           JOIN users uo ON uo.id = c.owner_id
+           JOIN games g ON g.id = c.game_id
+           LEFT JOIN loans l ON l.copy_id = c.id AND l.returned_at IS NULL
+           LEFT JOIN users ub ON ub.id = l.borrower_id
+           WHERE c.game_id = ?
+           ORDER BY c.status DESC, uo.display_name""",
+        (game_id,),
+    ).fetchall()
+    return [
+        {
+            "copy_id": r[0],
+            "owner_id": r[1],
+            "status": r[2],
+            "owner_name": r[3],
+            "city": r[4],
+            "neighborhood": r[5],
+            "borrower_id": r[6],
+            "borrower_name": r[7],
+            "title": r[8],
+        }
+        for r in rows
+    ]
+
+
 # ── Copies ───────────────────────────────────────────────────────────
 
 def add_copy(conn: sqlite3.Connection, game_id: int, owner_id: int) -> int:
