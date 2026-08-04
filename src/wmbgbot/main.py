@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 
 import httpx
 from telegram.ext import (
@@ -11,6 +10,8 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    MessageHandler,
+    filters,
 )
 
 from wmbgbot.config import Config
@@ -25,6 +26,7 @@ from wmbgbot.handlers import (
     handle_addgame_callback,
     handle_borrow,
     handle_decline,
+    handle_manual_title,
     handle_remove,
     handle_return,
     help_command,
@@ -76,6 +78,9 @@ def main() -> None:
     app.add_handler(CommandHandler("removegame", removegame))
     app.add_handler(CommandHandler("myrequests", myrequests))
     app.add_handler(CommandHandler("return", return_game))
+
+    # Manual title entry (when user types a title after /addgame with no BGG match)
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_manual_title))
 
     # Admin commands
     app.add_handler(CommandHandler("admin_edit_game", admin_edit_game))

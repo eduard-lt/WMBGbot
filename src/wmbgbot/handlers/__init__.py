@@ -2,6 +2,7 @@
 
 from wmbgbot.handlers.commands import (
     addgame,
+    handle_manual_title,
     help_command,
     library,
     mygames,
@@ -30,6 +31,7 @@ from wmbgbot.handlers.admin import (
 __all__ = [
     # Commands
     "addgame",
+    "handle_manual_title",
     "help_command",
     "library",
     "mygames",

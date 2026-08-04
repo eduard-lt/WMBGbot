@@ -250,7 +250,13 @@ async def addgame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         bgg_results = await search_bgg(bgg_client, bgg_base, query)
     except BGGError:
-        await update.message.reply_text("❌ Couldn't reach BoardGameGeek. Try again later.")
+        logger.warning("BGG search failed, offering manual entry for '%s'", query)
+        await update.message.reply_text(
+            f"⚠️ Couldn't reach BoardGameGeek.\n\n"
+            f"Adding *{query}* directly. Type the exact title you want, or send /cancel:"
+        )
+        context.user_data["awaiting_manual_title"] = True
+        context.user_data["manual_title_hint"] = query
         return
 
     if not bgg_results:
@@ -495,3 +501,40 @@ async def return_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         parse_mode="Markdown",
         reply_markup=reply_markup,
     )
+
+
+# ── Manual title entry (DM text when awaiting_manual_title is set) ──
+
+async def handle_manual_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle a text message in DM that should be a manual game title."""
+    if update.message is None or update.message.text is None or update.effective_user is None:
+        return
+
+    if update.effective_chat.type != ChatType.PRIVATE:
+        return
+
+    text = update.message.text.strip()
+    if text.startswith("/"):
+        return  # let other command handlers deal with it
+
+    if text.lower() == "/cancel":
+        context.user_data.pop("awaiting_manual_title", None)
+        context.user_data.pop("manual_title_hint", None)
+        await update.message.reply_text("Canceled.")
+        return
+
+    db = context.bot_data["db"]
+    from wmbgbot.db.queries import add_game, add_copy, get_user
+
+    user = get_user(db, update.effective_user.id)
+    if user is None:
+        await update.message.reply_text("You're not registered yet. Send /start in DM first.")
+        return
+
+    game_id = add_game(db, None, text, None)
+    add_copy(db, game_id, user.id)
+
+    context.user_data.pop("awaiting_manual_title", None)
+    context.user_data.pop("manual_title_hint", None)
+
+    await update.message.reply_text(f"✅ Added *{text}* to your collection!", parse_mode="Markdown")

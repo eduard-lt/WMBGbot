@@ -31,7 +31,8 @@ async def search_bgg(
         resp = await client.get(
             f"{base_url}{BGG_SEARCH_URL}",
             params={"query": query, "type": "boardgame"},
-            timeout=10,
+            timeout=15,
+            headers={"User-Agent": "WMBGbot/0.1 (personal use bot)"},
         )
         resp.raise_for_status()
     except httpx.HTTPError as exc:
