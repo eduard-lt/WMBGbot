@@ -1,5 +1,7 @@
 # 🎲 WMBGbot — Where's My Board Game Bot
 
+<div align="center"><img src="WMBG.png" alt="WMBGbot logo" width="200"/></div>
+
 A Telegram bot to catalog your friend group's board game collection and manage borrowing between friends. Runs on a Raspberry Pi 2 (24/7), no public port needed.
 
 ## Features
@@ -103,6 +105,15 @@ After you `/start` the bot in DM:
 # Find your telegram_id in the logs or the DB
 sqlite3 /home/eduard/boardgame-bot/data/bot.db \
   "UPDATE users SET is_admin = 1 WHERE telegram_id = <YOUR_TELEGRAM_ID>;"
+```
+
+### Setting the Bot Profile Picture
+
+Run this once from the repo (reads `WMBG.png` and sends it to Telegram):
+
+```bash
+cd /home/eduard/boardgame-bot
+.venv/bin/python scripts/set_bot_photo.py
 ```
 
 ### Database Backup
