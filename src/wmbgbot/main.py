@@ -103,4 +103,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+
+    # Python 3.12+ requires an explicit event loop for run_polling
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        main()
+    finally:
+        loop.close()
