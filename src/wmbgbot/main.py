@@ -65,7 +65,12 @@ def main() -> None:
     # Store shared resources in bot_data
     app.bot_data["db"] = db
     app.bot_data["config"] = config
-    app.bot_data["bgg_client"] = httpx.AsyncClient()
+
+    # Build BGG HTTP client with auth if token is configured
+    bgg_headers = {"User-Agent": "WMBGbot/0.1"}
+    if config.bgg_api_token:
+        bgg_headers["Authorization"] = f"Bearer {config.bgg_api_token}"
+    app.bot_data["bgg_client"] = httpx.AsyncClient(headers=bgg_headers)
 
     # ── Register command handlers ──────────────────────────────────
     app.add_handler(CommandHandler("start", start))
