@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from telegram import Update
+from telegram import CallbackQuery, Message, Update
 from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
@@ -219,10 +219,10 @@ async def addgame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _prompt_addgame(update.message, context)
 
 
-async def _prompt_addgame(target: Update.message | Update.callback_query, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _prompt_addgame(target: Message | CallbackQuery, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ask user to type the game title."""
     context.user_data["awaiting_game_title"] = True
-    if isinstance(target, Update.message):
+    if isinstance(target, Message):
         await target.reply_text("🎲 What game do you want to add? Just type the title:")
     else:
         await target.edit_message_text("🎲 What game do you want to add? Just type the title:")
@@ -275,17 +275,17 @@ async def removegame(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def _show_remove_list(
-    target: Update.message | Update.callback_query,
+    target: Message | CallbackQuery,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    if target.effective_user is None:
+    if target.from_user is None:
         return
 
     db = context.bot_data["db"]
     from wmbgbot.db.queries import get_user, get_user_copies
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    user = get_user(db, target.effective_user.id)
+    user = get_user(db, target.from_user.id)
     if user is None:
         await _reply(target, "You're not registered yet. Send /start in DM first.")
         return
@@ -325,7 +325,7 @@ async def library(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def _show_library(
-    target: Update.message | Update.callback_query,
+    target: Message | CallbackQuery,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
     db = context.bot_data["db"]
@@ -565,10 +565,10 @@ async def myrequests(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def _show_myrequests(
-    target: Update.message | Update.callback_query,
+    target: Message | CallbackQuery,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    if target.effective_user is None:
+    if target.from_user is None:
         return
 
     db = context.bot_data["db"]
@@ -579,7 +579,7 @@ async def _show_myrequests(
     )
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    user = get_user(db, target.effective_user.id)
+    user = get_user(db, target.from_user.id)
     if user is None:
         await _reply(target, "You're not registered yet. Send /start in DM first.")
         return
@@ -626,17 +626,17 @@ async def return_game(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def _show_return_list(
-    target: Update.message | Update.callback_query,
+    target: Message | CallbackQuery,
     context: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    if target.effective_user is None:
+    if target.from_user is None:
         return
 
     db = context.bot_data["db"]
     from wmbgbot.db.queries import get_user, get_active_loans_for_user
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-    user = get_user(db, target.effective_user.id)
+    user = get_user(db, target.from_user.id)
     if user is None:
         await _reply(target, "You're not registered yet. Send /start in DM first.")
         return
@@ -700,12 +700,12 @@ def _format_location(city: str | None, neighborhood: str | None) -> str:
 
 
 async def _reply(
-    target: Update.message | Update.callback_query,
+    target: Message | CallbackQuery,
     text: str,
     **kwargs,
 ) -> None:
     """Reply to either a message or callback query."""
-    if isinstance(target, Update.callback_query):
+    if isinstance(target, CallbackQuery):
         await target.edit_message_text(text, **kwargs)
-    elif isinstance(target, Update.message):
+    else:
         await target.reply_text(text, **kwargs)
