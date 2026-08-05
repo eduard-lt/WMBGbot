@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # ── /start ───────────────────────────────────────────────────────────
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Register a user. In DM: welcomes and prompts for profile setup."""
+    """Register a user. Requires invite code: /start <code>"""
     if update.effective_chat is None or update.effective_user is None:
         return
 
@@ -25,11 +25,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     db = context.bot_data["db"]
-    from wmbgbot.db.queries import upsert_user, set_dm_started
+    config = context.bot_data["config"]
+    from wmbgbot.db.queries import get_user, upsert_user, set_dm_started
 
     telegram_id = update.effective_user.id
-    display_name = update.effective_user.full_name or update.effective_user.username or "Unknown"
 
+    # Already registered? Just show welcome back
+    existing = get_user(db, telegram_id)
+    if existing is not None:
+        set_dm_started(db, telegram_id)
+        await update.message.reply_text(
+            f"Welcome back, {existing.display_name}! 🎲\n\n"
+            "You're already registered. Use /menu to see what you can do.",
+            parse_mode="Markdown",
+        )
+        return
+
+    # New user — validate invite code
+    code = " ".join(context.args) if context.args else ""
+    expected = config.invite_code
+
+    if not code or code != expected:
+        await update.message.reply_text(
+            "🔐 To join this board game group, you need an invite code.\n\n"
+            "Use `/start <code>` with the code shared by the group admin."
+        )
+        return
+
+    # Register
+    display_name = update.effective_user.full_name or update.effective_user.username or "Unknown"
     upsert_user(db, telegram_id, display_name)
     set_dm_started(db, telegram_id)
 

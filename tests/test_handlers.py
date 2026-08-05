@@ -39,7 +39,8 @@ async def test_start_in_dm_registers_user():
     update.message.reply_text = AsyncMock()
 
     context = MagicMock()
-    context.bot_data = {"db": db}
+    context.bot_data = {"db": db, "config": MagicMock(invite_code="secret")}
+    context.args = ["secret"]
 
     await start(update, context)
     update.message.reply_text.assert_called_once()
@@ -51,6 +52,32 @@ async def test_start_in_dm_registers_user():
     assert user is not None
     assert user.display_name == "Test User"
     assert user.dm_started is True
+
+
+@pytest.mark.asyncio
+async def test_start_rejects_wrong_code():
+    """/start with wrong invite code should reject."""
+    from wmbgbot.handlers.commands import start
+    from wmbgbot.db.schema import init_db
+
+    db = init_db(":memory:")
+
+    update = MagicMock()
+    update.effective_chat.type = "private"
+    update.effective_user.id = 99999
+    update.effective_user.full_name = "Stranger"
+    update.message.reply_text = AsyncMock()
+
+    context = MagicMock()
+    context.bot_data = {"db": db, "config": MagicMock(invite_code="secret")}
+    context.args = ["wrong"]
+
+    await start(update, context)
+    msg = update.message.reply_text.call_args[0][0]
+    assert "invite code" in msg.lower()
+
+    from wmbgbot.db.queries import get_user
+    assert get_user(db, 99999) is None
 
 
 @pytest.mark.asyncio

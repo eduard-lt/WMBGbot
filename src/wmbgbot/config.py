@@ -34,6 +34,7 @@ class Config:
     """Typed application configuration loaded from environment."""
 
     bot_token: str
+    invite_code: str
     database_path: str
     log_file: str
     log_level: str
@@ -48,6 +49,7 @@ class Config:
 
         return cls(
             bot_token=token,
+            invite_code=os.getenv("INVITE_CODE", "change-me"),
             database_path=os.getenv("DATABASE_PATH", "data/bot.db"),
             log_file=os.getenv("LOG_FILE", "bot.log"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
