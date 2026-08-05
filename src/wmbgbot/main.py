@@ -82,8 +82,8 @@ def main() -> None:
     app.add_handler(CommandHandler("return", return_game))
     app.add_handler(CommandHandler("setprofile", set_profile))
 
-    # Profile setup: text messages in DM for city/neighborhood input
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_manual_title))
+    # Text handler in group=1 so commands fire first
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_manual_title), group=1)
 
     # Admin commands
     app.add_handler(CommandHandler("admin_edit_game", admin_edit_game))
@@ -128,10 +128,6 @@ def main() -> None:
         BotCommand("removegame", "Remove one of your copies"),
         BotCommand("myrequests", "View pending borrow requests"),
         BotCommand("return", "Mark a borrowed game as returned"),
-        BotCommand("admin_list_users", "[Admin] List all registered users"),
-        BotCommand("admin_edit_game", "[Admin] Fix a bad title match"),
-        BotCommand("admin_remove_copy", "[Admin] Force-remove any copy"),
-        BotCommand("admin_reset_loan", "[Admin] Force-close a stuck loan"),
     ]
 
     loop = _asyncio.get_event_loop()
